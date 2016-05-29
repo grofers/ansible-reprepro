@@ -33,9 +33,6 @@ reprepro_admin_email: [ 'root@{{ reprepro_domain }}' ]
 
 # ---- Webserver configuration ----
 
-# List of domains for this APT repository
-reprepro_domains: [ '{{ "apt." + reprepro_domain }}' ]
-
 # List of IP addresses or CIDR subnets which are allowed to connect to the
 # webserver with the repository. If empty, everyone can access the repository.
 reprepro_allow: []
@@ -46,13 +43,6 @@ reprepro_allow_upload: []
 
 # Maximum size of upload in MB
 reprepro_max_body_size: '20'
-
-# Webserver authentication realm
-reprepro_nginx_auth_realm: 'APT access is restricted'
-
-# Name of webserver access policy to enable (see 'debops.nginx' role)
-reprepro_nginx_access_policy: ''
-
 
 # ---- Internal reprepro configuration ----
 
@@ -70,7 +60,7 @@ reprepro_upload: '{{ reprepro_home + "/incoming" }}'
 
 # Directory where reprepro will create its repository structure.
 # It will be served publicly by a HTTP/HTTPS webserver.
-reprepro_repository_path: '/srv/www/sites/{{ reprepro_domains[0] }}/public'
+reprepro_repository_path: '{{ reprepro_home }}/{{ reprepro_domain }}/public'
 
 # List of default components used in specific distribution. These lists will be
 # used if components are not specified for a given repository.
@@ -567,59 +557,49 @@ reprepro_updates_ubuntu:
     VerifyRelease: '437D05B5'
 
 # Configuration for HTTP server
-reprepro_nginx_server_http:
-  by_role: 'debops.reprepro'
-  enabled: True
-  ssl: False
-  redirect_to_ssl: '{{ reprepro_nginx_access_policy }}'
-  filename: '{{ reprepro_domains[0] + "_http" }}'
-  name: '{{ reprepro_domains }}'
-  root: '{{ reprepro_repository_path }}'
-
-  location:
-    '/': |
-      try_files $uri $uri/ =404;
-      autoindex on;
-      autoindex_exact_size off;
-      autoindex_localtime on;
-
-  location_allow:
-    '/': '{{ reprepro_allow }}'
-
-
-# Configuration for HTTPS server
-reprepro_nginx_server_https:
-  by_role: 'debops.reprepro'
-  enabled: True
-  listen: False
-  filename: '{{ reprepro_domains[0] + "_https" }}'
-  name: '{{ reprepro_domains }}'
-  root: '{{ reprepro_repository_path }}'
-
-  access_policy: '{{ reprepro_nginx_access_policy }}'
-  auth_basic_realm: '{{ reprepro_nginx_auth_realm }}'
-
-  options: |
-    client_max_body_size {{ reprepro_max_body_size }}M;
-
-  location:
-    '/': |
-      try_files $uri $uri/ =404;
-      autoindex on;
-      autoindex_exact_size off;
-      autoindex_localtime on;
-
-    '/upload': |
-      alias {{ reprepro_upload }};
-      dav_access all:rw;
-      dav_methods PUT;
-      limit_except PUT {
-              deny all;
-      }
-
-  location_allow:
-    '/': '{{ reprepro_allow }}'
-    '/upload': '{{ reprepro_allow_upload }}'
+reprepro_nginx_server:
+  - listen 80
+  - server_name {{ reprepro_domain }}
+  - root {{ reprepro_repository_path }}
+  - access_log /var/log/nginx/{{ reprepro_domain }}.log;
+  - error_log /var/log/nginx/{{ reprepro_domain }}.log;
+  - client_max_body_size {{ reprepro_max_body_size }}M;
+  - |
+    location ~ /\. {
+           return 404;
+    }
+  - |
+    location = /favicon.ico {
+           try_files /favicon.ico =204;
+           access_log off;
+           log_not_found off;
+    }
+  - |
+    location / {
+           try_files $uri $uri/ =404;
+           autoindex on;
+           autoindex_exact_size off;
+           autoindex_localtime on;
+           allow 10.0.0.0/16;
+           allow 10.1.0.0/16;
+           allow 10.254.0.0/16;
+           allow 172.31.0.0/16;
+           deny all;
+    }
+  - |
+    location /upload {
+           alias {{ reprepro_upload }};
+           dav_access all:rw;
+           dav_methods PUT;
+           limit_except PUT {
+                  deny all;
+           }
+           allow 10.0.0.0/16;
+           allow 10.1.0.0/16;
+           allow 10.254.0.0/16;
+           allow 172.31.0.0/16;
+           deny all;
+    }
 
 # Debian previous releases
 reprepro_debian_previous:
