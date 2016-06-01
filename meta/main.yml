@@ -4,10 +4,9 @@ dependencies:
 
   - role: debops.secret
 
-  - role: debops.nginx
-    nginx_servers:
-      - '{{ reprepro_nginx_server_http }}'
-      - '{{ reprepro_nginx_server_https }}'
+  - role: jdauphant.nginx
+    nginx_sites:
+      deb-repo: '{{ reprepro_nginx_server }}'
     tags: nginx
 
 galaxy_info:
